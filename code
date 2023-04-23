@@ -1,0 +1,99 @@
+import cv2
+import numpy as np
+
+# Função para identificar jogada (Pedra, Papel ou Tesoura)
+def identificar_jogada(frame):
+    # Definir faixa de valores de cor no espaço de cor HSV para cada jogada
+    faixa_cor_pedra = [(220, 190, 175), (230, 255, 255)] # Exemplo de faixa de cor para Pedra (vermelho)
+    faixa_cor_papel = [(36, 25, 25), (70, 255, 255)] # Exemplo de faixa de cor para Papel (verde)
+    faixa_cor_tesoura = [(85, 30, 40), (130, 255, 255)] # Exemplo de faixa de cor para Tesoura (azul)
+
+    # Converter frame para espaço de cor HSV
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+
+    # Segmentar a cor da jogada usando as faixas de cor definidas
+    mascara_pedra = cv2.inRange(hsv, faixa_cor_pedra[0], faixa_cor_pedra[1])
+    mascara_papel = cv2.inRange(hsv, faixa_cor_papel[0], faixa_cor_papel[1])
+    mascara_tesoura = cv2.inRange(hsv, faixa_cor_tesoura[0], faixa_cor_tesoura[1])
+
+    # Detectar contornos das mãos
+    contornos_maos, _ = cv2.findContours(mascara_pedra + mascara_papel + mascara_tesoura, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # Identificar jogada com base na cor média da jogada
+    jogada = None
+    for contorno in contornos_maos:
+        area = cv2.contourArea(contorno)
+        if area > 500: # Apenas considerar contornos com área mínima de 500 pixels
+            x, y, w, h = cv2.boundingRect(contorno)
+            roi = frame[y:y+h, x:x+w] # Região de interesse (ROI) da jogada
+            cor_media = np.mean(roi, axis=(0, 1)) # Calcular a cor média da ROI
+
+            if np.all(cor_media >= faixa_cor_pedra[0]) and np.all(cor_media <= faixa_cor_pedra[1]):
+                jogada = "Pedra"
+            elif np.all(cor_media >= faixa_cor_papel[0]) and np.all(cor_media <= faixa_cor_papel[1]):
+                jogada = "Papel"
+            elif np.all(cor_media >= faixa_cor_tesoura[0]) and np.all(cor_media <= faixa_cor_tesoura[1]):
+                jogada = "Tesoura"
+
+    return jogada
+
+# Abrir o vídeo
+cap = cv2.VideoCapture('pedra-papel-tesoura.mp4')
+
+# Obter o FPS original do vídeo
+fps = cap.get(cv2.CAP_PROP_FPS)
+
+# Definir o novo FPS para dobrar a velocidade do vídeo
+novo_fps = fps * 4
+
+# Definir o novo FPS no objeto de captura de vídeo
+cap.set(cv2.CAP_PROP_FPS, novo_fps)
+
+while True:
+    # Ler o próximo frame do vídeo
+    ret, frame = cap.read()
+
+    # Encerrar o loop se chegarmos ao final do vídeo
+    if not ret:
+        break
+
+    # Redimensionar o frame para facilitar a visualização
+    frame = cv2.resize(frame, (640, 480))
+
+    # Identificar a jogada do jogador 1 (mão esquerda)
+    jogada_jogador1 = identificar_jogada(frame[:, :320])
+
+    # Identificar a jogada do jogador 2 (mão direita)
+    jogada_jogador2 = identificar_jogada(frame[:, 320:])
+
+    # Determinar o resultado do jogo
+    if jogada_jogador1 and jogada_jogador2:
+        if jogada_jogador1 == jogada_jogador2:
+            resultado = "Empate"
+        elif (jogada_jogador1 == "Pedra" and jogada_jogador2 == "Tesoura") or \
+                (jogada_jogador1 == "Papel" and jogada_jogador2 == "Pedra") or \
+                (jogada_jogador1 == "Tesoura" and jogada_jogador2 == "Papel"):
+            resultado = "Jogador 1"
+        else:
+            resultado = "Jogador 2"
+    else:
+        resultado = "Aguardando jogada..."
+
+    # Exibir o resultado no frame do vídeo
+    if resultado == "Empate":
+        cv2.putText(frame, resultado, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+    else:
+        cv2.putText(frame, f"Vencedor: {resultado}", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+
+    # Exibir o frame com o resultado
+    cv2.imshow("Jogo Pedra, Papel e Tesoura", frame)
+
+    # Aguardar a tecla 'q' ser pressionada para encerrar o jogo
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+# Liberar os recursos
+cap.release()
+cv2.destroyAllWindows()
+                    
+                    
